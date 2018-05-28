@@ -29,6 +29,8 @@
 #include <linux/delay.h>
 #include <linux/spi/spi.h>
 #include <linux/of_net.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include "enc28j60_hw.h"
 
@@ -1550,16 +1552,42 @@ static const struct net_device_ops enc28j60_netdev_ops = {
 	.ndo_validate_addr	= eth_validate_addr,
 };
 
+static int enc28j60_get_irq(struct spi_device *spi)
+{
+	int irq;
+	struct gpio_desc *irq_gpio;
+
+	irq_gpio = devm_gpiod_get_optional(&spi->dev, "irq", GPIOD_IN);
+	if (IS_ERR(irq_gpio)) {
+		dev_err(&spi->dev, "Could't request IRQ GPIO %ld\n", PTR_ERR(irq_gpio));
+		goto out;
+	}
+
+	irq = gpiod_to_irq(irq_gpio);
+	if (irq > 0) {
+		irq_set_irq_type(irq, IRQ_TYPE_LEVEL_LOW);
+		dev_dbg(&spi->dev, "irq=%d\n", irq);
+		return irq;
+	}
+out:
+	return 0;
+}
+
 static int enc28j60_probe(struct spi_device *spi)
 {
 	struct net_device *dev;
 	struct enc28j60_net *priv;
 	const void *macaddr;
 	int ret = 0;
+	int irq;
 
 	if (netif_msg_drv(&debug))
 		dev_info(&spi->dev, DRV_NAME " Ethernet driver %s loaded\n",
 			DRV_VERSION);
+
+	irq = spi->irq;
+	if (!irq)
+		irq = enc28j60_get_irq(spi);
 
 	dev = alloc_etherdev(sizeof(struct enc28j60_net));
 	if (!dev) {
@@ -1597,7 +1625,7 @@ static int enc28j60_probe(struct spi_device *spi)
 	/* Board setup must set the relevant edge trigger type;
 	 * level triggers won't currently work.
 	 */
-	ret = request_irq(spi->irq, enc28j60_irq, 0, DRV_NAME, priv);
+	ret = request_irq(irq, enc28j60_irq, 0, DRV_NAME, priv);
 	if (ret < 0) {
 		if (netif_msg_probe(priv))
 			dev_err(&spi->dev, DRV_NAME ": request irq %d failed "
