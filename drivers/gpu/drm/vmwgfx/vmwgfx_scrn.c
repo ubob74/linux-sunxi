@@ -482,6 +482,8 @@ vmw_sou_primary_plane_prepare_fb(struct drm_plane *plane,
 		return ret;
 	}
 
+	vps->dmabuf_size = size;
+
 	/*
 	 * TTM already thinks the buffer is pinned, but make sure the
 	 * pin_count is upped.
@@ -525,8 +527,6 @@ vmw_sou_primary_plane_atomic_update(struct drm_plane *plane,
 		 */
 		if (ret != 0)
 			DRM_ERROR("Failed to update screen.\n");
-
-		crtc->primary->fb = plane->state->fb;
 	} else {
 		/*
 		 * When disabling a plane, CRTC and FB should always be NULL

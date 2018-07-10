@@ -89,10 +89,6 @@ void xen_drm_front_shbuf_free(struct xen_drm_front_shbuf *buf)
 	}
 	kfree(buf->grefs);
 	kfree(buf->directory);
-	if (buf->sgt) {
-		sg_free_table(buf->sgt);
-		kvfree(buf->pages);
-	}
 	kfree(buf);
 }
 
@@ -126,7 +122,7 @@ static void guest_calc_num_grefs(struct xen_drm_front_shbuf *buf)
 }
 
 #define xen_page_to_vaddr(page) \
-		((phys_addr_t)pfn_to_kaddr(page_to_xen_pfn(page)))
+		((uintptr_t)pfn_to_kaddr(page_to_xen_pfn(page)))
 
 static int backend_unmap(struct xen_drm_front_shbuf *buf)
 {
@@ -350,17 +346,6 @@ static int grant_references(struct xen_drm_front_shbuf *buf)
 
 static int alloc_storage(struct xen_drm_front_shbuf *buf)
 {
-	if (buf->sgt) {
-		buf->pages = kvmalloc_array(buf->num_pages,
-					    sizeof(struct page *), GFP_KERNEL);
-		if (!buf->pages)
-			return -ENOMEM;
-
-		if (drm_prime_sg_to_page_addr_arrays(buf->sgt, buf->pages,
-						     NULL, buf->num_pages) < 0)
-			return -EINVAL;
-	}
-
 	buf->grefs = kcalloc(buf->num_grefs, sizeof(*buf->grefs), GFP_KERNEL);
 	if (!buf->grefs)
 		return -ENOMEM;
@@ -396,15 +381,9 @@ xen_drm_front_shbuf_alloc(struct xen_drm_front_shbuf_cfg *cfg)
 	struct xen_drm_front_shbuf *buf;
 	int ret;
 
-	/* either pages or sgt, not both */
-	if (unlikely(cfg->pages && cfg->sgt)) {
-		DRM_ERROR("Cannot handle buffer allocation with both pages and sg table provided\n");
-		return NULL;
-	}
-
 	buf = kzalloc(sizeof(*buf), GFP_KERNEL);
 	if (!buf)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	if (cfg->be_alloc)
 		buf->ops = &backend_ops;
@@ -413,7 +392,6 @@ xen_drm_front_shbuf_alloc(struct xen_drm_front_shbuf_cfg *cfg)
 
 	buf->xb_dev = cfg->xb_dev;
 	buf->num_pages = DIV_ROUND_UP(cfg->size, PAGE_SIZE);
-	buf->sgt = cfg->sgt;
 	buf->pages = cfg->pages;
 
 	buf->ops->calc_num_grefs(buf);

@@ -461,7 +461,8 @@ static void intel_write_infoframe(struct drm_encoder *encoder,
 }
 
 static void intel_hdmi_set_avi_infoframe(struct drm_encoder *encoder,
-					 const struct intel_crtc_state *crtc_state)
+					 const struct intel_crtc_state *crtc_state,
+					 const struct drm_connector_state *conn_state)
 {
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(encoder);
 	const struct drm_display_mode *adjusted_mode =
@@ -490,6 +491,9 @@ static void intel_hdmi_set_avi_infoframe(struct drm_encoder *encoder,
 					   HDMI_QUANTIZATION_RANGE_FULL,
 					   intel_hdmi->rgb_quant_range_selectable,
 					   is_hdmi2_sink);
+
+	drm_hdmi_avi_infoframe_content_type(&frame.avi,
+					    conn_state);
 
 	/* TODO: handle pixel repetition for YCBCR420 outputs */
 	intel_write_infoframe(encoder, crtc_state, &frame);
@@ -586,7 +590,7 @@ static void g4x_set_infoframes(struct drm_encoder *encoder,
 	I915_WRITE(reg, val);
 	POSTING_READ(reg);
 
-	intel_hdmi_set_avi_infoframe(encoder, crtc_state);
+	intel_hdmi_set_avi_infoframe(encoder, crtc_state, conn_state);
 	intel_hdmi_set_spd_infoframe(encoder, crtc_state);
 	intel_hdmi_set_hdmi_infoframe(encoder, crtc_state, conn_state);
 }
@@ -727,7 +731,7 @@ static void ibx_set_infoframes(struct drm_encoder *encoder,
 	I915_WRITE(reg, val);
 	POSTING_READ(reg);
 
-	intel_hdmi_set_avi_infoframe(encoder, crtc_state);
+	intel_hdmi_set_avi_infoframe(encoder, crtc_state, conn_state);
 	intel_hdmi_set_spd_infoframe(encoder, crtc_state);
 	intel_hdmi_set_hdmi_infoframe(encoder, crtc_state, conn_state);
 }
@@ -770,7 +774,7 @@ static void cpt_set_infoframes(struct drm_encoder *encoder,
 	I915_WRITE(reg, val);
 	POSTING_READ(reg);
 
-	intel_hdmi_set_avi_infoframe(encoder, crtc_state);
+	intel_hdmi_set_avi_infoframe(encoder, crtc_state, conn_state);
 	intel_hdmi_set_spd_infoframe(encoder, crtc_state);
 	intel_hdmi_set_hdmi_infoframe(encoder, crtc_state, conn_state);
 }
@@ -823,7 +827,7 @@ static void vlv_set_infoframes(struct drm_encoder *encoder,
 	I915_WRITE(reg, val);
 	POSTING_READ(reg);
 
-	intel_hdmi_set_avi_infoframe(encoder, crtc_state);
+	intel_hdmi_set_avi_infoframe(encoder, crtc_state, conn_state);
 	intel_hdmi_set_spd_infoframe(encoder, crtc_state);
 	intel_hdmi_set_hdmi_infoframe(encoder, crtc_state, conn_state);
 }
@@ -856,7 +860,7 @@ static void hsw_set_infoframes(struct drm_encoder *encoder,
 	I915_WRITE(reg, val);
 	POSTING_READ(reg);
 
-	intel_hdmi_set_avi_infoframe(encoder, crtc_state);
+	intel_hdmi_set_avi_infoframe(encoder, crtc_state, conn_state);
 	intel_hdmi_set_spd_infoframe(encoder, crtc_state);
 	intel_hdmi_set_hdmi_infoframe(encoder, crtc_state, conn_state);
 }
@@ -1557,6 +1561,9 @@ intel_hdmi_mode_valid(struct drm_connector *connector,
 	bool force_dvi =
 		READ_ONCE(to_intel_digital_connector_state(connector->state)->force_audio) == HDMI_AUDIO_OFF_DVI;
 
+	if (mode->flags & DRM_MODE_FLAG_DBLSCAN)
+		return MODE_NO_DBLESCAN;
+
 	clock = mode->clock;
 
 	if ((mode->flags & DRM_MODE_FLAG_3D_MASK) == DRM_MODE_FLAG_3D_FRAME_PACKING)
@@ -1676,6 +1683,9 @@ bool intel_hdmi_compute_config(struct intel_encoder *encoder,
 	int clock_12bpc = clock_8bpc * 3 / 2;
 	int desired_bpp;
 	bool force_dvi = intel_conn_state->force_audio == HDMI_AUDIO_OFF_DVI;
+
+	if (adjusted_mode->flags & DRM_MODE_FLAG_DBLSCAN)
+		return false;
 
 	pipe_config->has_hdmi_sink = !force_dvi && intel_hdmi->has_hdmi_sink;
 
@@ -2065,6 +2075,7 @@ intel_hdmi_add_properties(struct intel_hdmi *intel_hdmi, struct drm_connector *c
 	intel_attach_force_audio_property(connector);
 	intel_attach_broadcast_rgb_property(connector);
 	intel_attach_aspect_ratio_property(connector);
+	drm_connector_attach_content_type_property(connector);
 	connector->state->picture_aspect_ratio = HDMI_PICTURE_ASPECT_NONE;
 }
 
@@ -2082,41 +2093,33 @@ intel_hdmi_add_properties(struct intel_hdmi *intel_hdmi, struct drm_connector *c
  * it enables scrambling. This should be called before enabling the HDMI
  * 2.0 port, as the sink can choose to disable the scrambling if it doesn't
  * detect a scrambled clock within 100 ms.
+ *
+ * Returns:
+ * True on success, false on failure.
  */
-void intel_hdmi_handle_sink_scrambling(struct intel_encoder *encoder,
+bool intel_hdmi_handle_sink_scrambling(struct intel_encoder *encoder,
 				       struct drm_connector *connector,
 				       bool high_tmds_clock_ratio,
 				       bool scrambling)
 {
+	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
-	struct drm_i915_private *dev_priv = connector->dev->dev_private;
 	struct drm_scrambling *sink_scrambling =
-				&connector->display_info.hdmi.scdc.scrambling;
-	struct i2c_adapter *adptr = intel_gmbus_get_adapter(dev_priv,
-							   intel_hdmi->ddc_bus);
-	bool ret;
+		&connector->display_info.hdmi.scdc.scrambling;
+	struct i2c_adapter *adapter =
+		intel_gmbus_get_adapter(dev_priv, intel_hdmi->ddc_bus);
 
 	if (!sink_scrambling->supported)
-		return;
+		return true;
 
-	DRM_DEBUG_KMS("Setting sink scrambling for enc:%s connector:%s\n",
-		      encoder->base.name, connector->name);
+	DRM_DEBUG_KMS("[CONNECTOR:%d:%s] scrambling=%s, TMDS bit clock ratio=1/%d\n",
+		      connector->base.id, connector->name,
+		      yesno(scrambling), high_tmds_clock_ratio ? 40 : 10);
 
-	/* Set TMDS bit clock ratio to 1/40 or 1/10 */
-	ret = drm_scdc_set_high_tmds_clock_ratio(adptr, high_tmds_clock_ratio);
-	if (!ret) {
-		DRM_ERROR("Set TMDS ratio failed\n");
-		return;
-	}
-
-	/* Enable/disable sink scrambling */
-	ret = drm_scdc_set_scrambling(adptr, scrambling);
-	if (!ret) {
-		DRM_ERROR("Set sink scrambling failed\n");
-		return;
-	}
-
-	DRM_DEBUG_KMS("sink scrambling handled\n");
+	/* Set TMDS bit clock ratio to 1/40 or 1/10, and enable/disable scrambling */
+	return drm_scdc_set_high_tmds_clock_ratio(adapter,
+						  high_tmds_clock_ratio) &&
+		drm_scdc_set_scrambling(adapter, scrambling);
 }
 
 static u8 chv_port_to_ddc_pin(struct drm_i915_private *dev_priv, enum port port)

@@ -1536,9 +1536,13 @@ vmw_kms_atomic_check_modeset(struct drm_device *dev,
 		unsigned long requested_bb_mem = 0;
 
 		if (dev_priv->active_display_unit == vmw_du_screen_target) {
-			if (crtc->primary->fb) {
-				int cpp = crtc->primary->fb->pitches[0] /
-					  crtc->primary->fb->width;
+			struct drm_plane *plane = crtc->primary;
+			struct drm_plane_state *plane_state;
+
+			plane_state = drm_atomic_get_new_plane_state(state, plane);
+
+			if (plane_state && plane_state->fb) {
+				int cpp = plane_state->fb->format->cpp[0];
 
 				requested_bb_mem += crtc->mode.hdisplay * cpp *
 						    crtc->mode.vdisplay;
@@ -2322,9 +2326,10 @@ int vmw_kms_helper_dirty(struct vmw_private *dev_priv,
 	} else {
 		list_for_each_entry(crtc, &dev_priv->dev->mode_config.crtc_list,
 				    head) {
-			if (crtc->primary->fb != &framebuffer->base)
-				continue;
-			units[num_units++] = vmw_crtc_to_du(crtc);
+			struct drm_plane *plane = crtc->primary;
+
+			if (plane->state->fb == &framebuffer->base)
+				units[num_units++] = vmw_crtc_to_du(crtc);
 		}
 	}
 
@@ -2595,6 +2600,7 @@ void vmw_kms_helper_resource_finish(struct vmw_validation_ctx *ctx,
 		vmw_kms_helper_buffer_finish(res->dev_priv, NULL, ctx->buf,
 					     out_fence, NULL);
 
+	vmw_dmabuf_unreference(&ctx->buf);
 	vmw_resource_unreserve(res, false, NULL, 0);
 	mutex_unlock(&res->dev_priv->cmdbuf_mutex);
 }
@@ -2680,7 +2686,9 @@ int vmw_kms_fbdev_init_data(struct vmw_private *dev_priv,
 	struct vmw_display_unit *du;
 	struct drm_display_mode *mode;
 	int i = 0;
+	int ret = 0;
 
+	mutex_lock(&dev_priv->dev->mode_config.mutex);
 	list_for_each_entry(con, &dev_priv->dev->mode_config.connector_list,
 			    head) {
 		if (i == unit)
@@ -2691,7 +2699,8 @@ int vmw_kms_fbdev_init_data(struct vmw_private *dev_priv,
 
 	if (i != unit) {
 		DRM_ERROR("Could not find initial display unit.\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out_unlock;
 	}
 
 	if (list_empty(&con->modes))
@@ -2699,7 +2708,8 @@ int vmw_kms_fbdev_init_data(struct vmw_private *dev_priv,
 
 	if (list_empty(&con->modes)) {
 		DRM_ERROR("Could not find initial display mode.\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out_unlock;
 	}
 
 	du = vmw_connector_to_du(con);
@@ -2720,7 +2730,10 @@ int vmw_kms_fbdev_init_data(struct vmw_private *dev_priv,
 					   head);
 	}
 
-	return 0;
+ out_unlock:
+	mutex_unlock(&dev_priv->dev->mode_config.mutex);
+
+	return ret;
 }
 
 /**
@@ -2798,6 +2811,7 @@ void vmw_kms_update_implicit_fb(struct vmw_private *dev_priv,
 				struct drm_crtc *crtc)
 {
 	struct vmw_display_unit *du = vmw_crtc_to_du(crtc);
+	struct drm_plane *plane = crtc->primary;
 	struct vmw_framebuffer *vfb;
 
 	mutex_lock(&dev_priv->global_kms_state_mutex);
@@ -2805,7 +2819,7 @@ void vmw_kms_update_implicit_fb(struct vmw_private *dev_priv,
 	if (!du->is_implicit)
 		goto out_unlock;
 
-	vfb = vmw_framebuffer_to_vfb(crtc->primary->fb);
+	vfb = vmw_framebuffer_to_vfb(plane->state->fb);
 	WARN_ON_ONCE(dev_priv->num_implicit != 1 &&
 		     dev_priv->implicit_fb != vfb);
 
