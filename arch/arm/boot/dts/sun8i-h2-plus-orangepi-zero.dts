@@ -180,13 +180,21 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi1_pins>;
 	status = "okay";
-
+/*
 	enc28j60@0 {
 		compatible = "microchip,enc28j60";
 		spi-max-frequency = <1000000>;
-		irq-gpio = <&pio 0 10 GPIO_ACTIVE_HIGH>; /* PA10 */
+		irq-gpio = <&pio 0 10 GPIO_ACTIVE_HIGH>; *//* PA10 */
+/*		reg = <0>;
+    };*/
+
+	mmc-slot@0 {
+		compatible = "mmc-spi-slot";
 		reg = <0>;
-    };
+		/*gpios = <&pio 0 18 GPIO_ACTIVE_LOW>; *//* PA18 */
+		voltage-ranges = <3300 3300>;
+		spi-max-frequency = <5000000>;
+	};
 };
 
 &uart0 {
