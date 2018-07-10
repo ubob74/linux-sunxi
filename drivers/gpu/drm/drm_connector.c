@@ -87,6 +87,7 @@ static struct drm_conn_prop_enum_list drm_connector_enum_list[] = {
 	{ DRM_MODE_CONNECTOR_VIRTUAL, "Virtual" },
 	{ DRM_MODE_CONNECTOR_DSI, "DSI" },
 	{ DRM_MODE_CONNECTOR_DPI, "DPI" },
+	{ DRM_MODE_CONNECTOR_WRITEBACK, "Writeback" },
 };
 
 void drm_connector_ida_init(void)
@@ -195,6 +196,10 @@ int drm_connector_init(struct drm_device *dev,
 	struct ida *connector_ida =
 		&drm_connector_enum_list[connector_type].ida;
 
+	WARN_ON(drm_drv_uses_atomic_modeset(dev) &&
+		(!funcs->atomic_destroy_state ||
+		 !funcs->atomic_duplicate_state));
+
 	ret = __drm_mode_object_add(dev, &connector->base,
 				    DRM_MODE_OBJECT_CONNECTOR,
 				    false, drm_connector_free);
@@ -249,7 +254,8 @@ int drm_connector_init(struct drm_device *dev,
 	config->num_connector++;
 	spin_unlock_irq(&config->connector_list_lock);
 
-	if (connector_type != DRM_MODE_CONNECTOR_VIRTUAL)
+	if (connector_type != DRM_MODE_CONNECTOR_VIRTUAL &&
+	    connector_type != DRM_MODE_CONNECTOR_WRITEBACK)
 		drm_object_attach_property(&connector->base,
 					      config->edid_property,
 					      0);
@@ -720,6 +726,14 @@ static const struct drm_prop_enum_list drm_aspect_ratio_enum_list[] = {
 	{ DRM_MODE_PICTURE_ASPECT_16_9, "16:9" },
 };
 
+static const struct drm_prop_enum_list drm_content_type_enum_list[] = {
+	{ DRM_MODE_CONTENT_TYPE_NO_DATA, "No Data" },
+	{ DRM_MODE_CONTENT_TYPE_GRAPHICS, "Graphics" },
+	{ DRM_MODE_CONTENT_TYPE_PHOTO, "Photo" },
+	{ DRM_MODE_CONTENT_TYPE_CINEMA, "Cinema" },
+	{ DRM_MODE_CONTENT_TYPE_GAME, "Game" },
+};
+
 static const struct drm_prop_enum_list drm_panel_orientation_enum_list[] = {
 	{ DRM_MODE_PANEL_ORIENTATION_NORMAL,	"Normal"	},
 	{ DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP,	"Upside Down"	},
@@ -997,6 +1011,84 @@ int drm_mode_create_dvi_i_properties(struct drm_device *dev)
 EXPORT_SYMBOL(drm_mode_create_dvi_i_properties);
 
 /**
+ * DOC: HDMI connector properties
+ *
+ * content type (HDMI specific):
+ *	Indicates content type setting to be used in HDMI infoframes to indicate
+ *	content type for the external device, so that it adjusts it's display
+ *	settings accordingly.
+ *
+ *	The value of this property can be one of the following:
+ *
+ *	No Data:
+ *		Content type is unknown
+ *	Graphics:
+ *		Content type is graphics
+ *	Photo:
+ *		Content type is photo
+ *	Cinema:
+ *		Content type is cinema
+ *	Game:
+ *		Content type is game
+ *
+ *	Drivers can set up this property by calling
+ *	drm_connector_attach_content_type_property(). Decoding to
+ *	infoframe values is done through
+ *	drm_hdmi_get_content_type_from_property() and
+ *	drm_hdmi_get_itc_bit_from_property().
+ */
+
+/**
+ * drm_connector_attach_content_type_property - attach content-type property
+ * @connector: connector to attach content type property on.
+ *
+ * Called by a driver the first time a HDMI connector is made.
+ */
+int drm_connector_attach_content_type_property(struct drm_connector *connector)
+{
+	if (!drm_mode_create_content_type_property(connector->dev))
+		drm_object_attach_property(&connector->base,
+					   connector->dev->mode_config.content_type_property,
+					   DRM_MODE_CONTENT_TYPE_NO_DATA);
+	return 0;
+}
+EXPORT_SYMBOL(drm_connector_attach_content_type_property);
+
+
+/**
+ * drm_hdmi_avi_infoframe_content_type() - fill the HDMI AVI infoframe
+ *                                         content type information, based
+ *                                         on correspondent DRM property.
+ * @frame: HDMI AVI infoframe
+ * @conn_state: DRM display connector state
+ *
+ */
+void drm_hdmi_avi_infoframe_content_type(struct hdmi_avi_infoframe *frame,
+					 const struct drm_connector_state *conn_state)
+{
+	switch (conn_state->content_type) {
+	case DRM_MODE_CONTENT_TYPE_GRAPHICS:
+		frame->content_type = HDMI_CONTENT_TYPE_GRAPHICS;
+		break;
+	case DRM_MODE_CONTENT_TYPE_CINEMA:
+		frame->content_type = HDMI_CONTENT_TYPE_CINEMA;
+		break;
+	case DRM_MODE_CONTENT_TYPE_GAME:
+		frame->content_type = HDMI_CONTENT_TYPE_GAME;
+		break;
+	case DRM_MODE_CONTENT_TYPE_PHOTO:
+		frame->content_type = HDMI_CONTENT_TYPE_PHOTO;
+		break;
+	default:
+		/* Graphics is the default(0) */
+		frame->content_type = HDMI_CONTENT_TYPE_GRAPHICS;
+	}
+
+	frame->itc = conn_state->content_type != DRM_MODE_CONTENT_TYPE_NO_DATA;
+}
+EXPORT_SYMBOL(drm_hdmi_avi_infoframe_content_type);
+
+/**
  * drm_create_tv_properties - create TV specific connector properties
  * @dev: DRM device
  * @num_modes: number of different TV formats (modes) supported
@@ -1069,7 +1161,7 @@ int drm_mode_create_tv_properties(struct drm_device *dev,
 		goto nomem;
 
 	for (i = 0; i < num_modes; i++)
-		drm_property_add_enum(dev->mode_config.tv_mode_property, i,
+		drm_property_add_enum(dev->mode_config.tv_mode_property,
 				      i, modes[i]);
 
 	dev->mode_config.tv_brightness_property =
@@ -1156,7 +1248,7 @@ int drm_connector_attach_scaling_mode_property(struct drm_connector *connector,
 {
 	struct drm_device *dev = connector->dev;
 	struct drm_property *scaling_mode_property;
-	int i, j = 0;
+	int i;
 	const unsigned valid_scaling_mode_mask =
 		(1U << ARRAY_SIZE(drm_scaling_mode_enum_list)) - 1;
 
@@ -1177,7 +1269,7 @@ int drm_connector_attach_scaling_mode_property(struct drm_connector *connector,
 		if (!(BIT(i) & scaling_mode_mask))
 			continue;
 
-		ret = drm_property_add_enum(scaling_mode_property, j++,
+		ret = drm_property_add_enum(scaling_mode_property,
 					    drm_scaling_mode_enum_list[i].type,
 					    drm_scaling_mode_enum_list[i].name);
 
@@ -1259,6 +1351,33 @@ int drm_mode_create_aspect_ratio_property(struct drm_device *dev)
 	return 0;
 }
 EXPORT_SYMBOL(drm_mode_create_aspect_ratio_property);
+
+/**
+ * drm_mode_create_content_type_property - create content type property
+ * @dev: DRM device
+ *
+ * Called by a driver the first time it's needed, must be attached to desired
+ * connectors.
+ *
+ * Returns:
+ * Zero on success, negative errno on failure.
+ */
+int drm_mode_create_content_type_property(struct drm_device *dev)
+{
+	if (dev->mode_config.content_type_property)
+		return 0;
+
+	dev->mode_config.content_type_property =
+		drm_property_create_enum(dev, 0, "content type",
+					 drm_content_type_enum_list,
+					 ARRAY_SIZE(drm_content_type_enum_list));
+
+	if (dev->mode_config.content_type_property == NULL)
+		return -ENOMEM;
+
+	return 0;
+}
+EXPORT_SYMBOL(drm_mode_create_content_type_property);
 
 /**
  * drm_mode_create_suggested_offset_properties - create suggests offset properties
@@ -1531,8 +1650,10 @@ static struct drm_encoder *drm_connector_get_encoder(struct drm_connector *conne
 	return connector->encoder;
 }
 
-static bool drm_mode_expose_to_userspace(const struct drm_display_mode *mode,
-					 const struct drm_file *file_priv)
+static bool
+drm_mode_expose_to_userspace(const struct drm_display_mode *mode,
+			     const struct list_head *export_list,
+			     const struct drm_file *file_priv)
 {
 	/*
 	 * If user-space hasn't configured the driver to expose the stereo 3D
@@ -1540,6 +1661,23 @@ static bool drm_mode_expose_to_userspace(const struct drm_display_mode *mode,
 	 */
 	if (!file_priv->stereo_allowed && drm_mode_is_stereo(mode))
 		return false;
+	/*
+	 * If user-space hasn't configured the driver to expose the modes
+	 * with aspect-ratio, don't expose them. However if such a mode
+	 * is unique, let it be exposed, but reset the aspect-ratio flags
+	 * while preparing the list of user-modes.
+	 */
+	if (!file_priv->aspect_ratio_allowed) {
+		struct drm_display_mode *mode_itr;
+
+		list_for_each_entry(mode_itr, export_list, export_head)
+			if (drm_mode_match(mode_itr, mode,
+					   DRM_MODE_MATCH_TIMINGS |
+					   DRM_MODE_MATCH_CLOCK |
+					   DRM_MODE_MATCH_FLAGS |
+					   DRM_MODE_MATCH_3D_FLAGS))
+				return false;
+	}
 
 	return true;
 }
@@ -1559,6 +1697,7 @@ int drm_mode_getconnector(struct drm_device *dev, void *data,
 	struct drm_mode_modeinfo u_mode;
 	struct drm_mode_modeinfo __user *mode_ptr;
 	uint32_t __user *encoder_ptr;
+	LIST_HEAD(export_list);
 
 	if (!drm_core_check_feature(dev, DRIVER_MODESET))
 		return -EINVAL;
@@ -1607,21 +1746,31 @@ int drm_mode_getconnector(struct drm_device *dev, void *data,
 
 	/* delayed so we get modes regardless of pre-fill_modes state */
 	list_for_each_entry(mode, &connector->modes, head)
-		if (drm_mode_expose_to_userspace(mode, file_priv))
+		if (drm_mode_expose_to_userspace(mode, &export_list,
+						 file_priv)) {
+			list_add_tail(&mode->export_head, &export_list);
 			mode_count++;
+		}
 
 	/*
 	 * This ioctl is called twice, once to determine how much space is
 	 * needed, and the 2nd time to fill it.
+	 * The modes that need to be exposed to the user are maintained in the
+	 * 'export_list'. When the ioctl is called first time to determine the,
+	 * space, the export_list gets filled, to find the no.of modes. In the
+	 * 2nd time, the user modes are filled, one by one from the export_list.
 	 */
 	if ((out_resp->count_modes >= mode_count) && mode_count) {
 		copied = 0;
 		mode_ptr = (struct drm_mode_modeinfo __user *)(unsigned long)out_resp->modes_ptr;
-		list_for_each_entry(mode, &connector->modes, head) {
-			if (!drm_mode_expose_to_userspace(mode, file_priv))
-				continue;
-
+		list_for_each_entry(mode, &export_list, export_head) {
 			drm_mode_convert_to_umode(&u_mode, mode);
+			/*
+			 * Reset aspect ratio flags of user-mode, if modes with
+			 * aspect-ratio are not supported.
+			 */
+			if (!file_priv->aspect_ratio_allowed)
+				u_mode.flags &= ~DRM_MODE_FLAG_PIC_AR_MASK;
 			if (copy_to_user(mode_ptr + copied,
 					 &u_mode, sizeof(u_mode))) {
 				ret = -EFAULT;

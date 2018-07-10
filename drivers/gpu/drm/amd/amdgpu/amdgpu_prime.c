@@ -102,12 +102,18 @@ amdgpu_gem_prime_import_sg_table(struct drm_device *dev,
 	struct reservation_object *resv = attach->dmabuf->resv;
 	struct amdgpu_device *adev = dev->dev_private;
 	struct amdgpu_bo *bo;
+	struct amdgpu_bo_param bp;
 	int ret;
 
+	memset(&bp, 0, sizeof(bp));
+	bp.size = attach->dmabuf->size;
+	bp.byte_align = PAGE_SIZE;
+	bp.domain = AMDGPU_GEM_DOMAIN_CPU;
+	bp.flags = 0;
+	bp.type = ttm_bo_type_sg;
+	bp.resv = resv;
 	ww_mutex_lock(&resv->lock, NULL);
-	ret = amdgpu_bo_create(adev, attach->dmabuf->size, PAGE_SIZE,
-			       AMDGPU_GEM_DOMAIN_CPU, 0, ttm_bo_type_sg,
-			       resv, &bo);
+	ret = amdgpu_bo_create(adev, &bp, &bo);
 	if (ret)
 		goto error;
 
@@ -127,7 +133,6 @@ error:
 }
 
 static int amdgpu_gem_map_attach(struct dma_buf *dma_buf,
-				 struct device *target_dev,
 				 struct dma_buf_attachment *attach)
 {
 	struct drm_gem_object *obj = dma_buf->priv;
@@ -135,7 +140,7 @@ static int amdgpu_gem_map_attach(struct dma_buf *dma_buf,
 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->tbo.bdev);
 	long r;
 
-	r = drm_gem_map_attach(dma_buf, target_dev, attach);
+	r = drm_gem_map_attach(dma_buf, attach);
 	if (r)
 		return r;
 
@@ -209,7 +214,7 @@ static int amdgpu_gem_begin_cpu_access(struct dma_buf *dma_buf,
 	struct amdgpu_bo *bo = gem_to_amdgpu_bo(dma_buf->priv);
 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->tbo.bdev);
 	struct ttm_operation_ctx ctx = { true, false };
-	u32 domain = amdgpu_display_framebuffer_domains(adev);
+	u32 domain = amdgpu_display_supported_domains(adev);
 	int ret;
 	bool reads = (direction == DMA_BIDIRECTIONAL ||
 		      direction == DMA_FROM_DEVICE);
@@ -239,9 +244,7 @@ static const struct dma_buf_ops amdgpu_dmabuf_ops = {
 	.release = drm_gem_dmabuf_release,
 	.begin_cpu_access = amdgpu_gem_begin_cpu_access,
 	.map = drm_gem_dmabuf_kmap,
-	.map_atomic = drm_gem_dmabuf_kmap_atomic,
 	.unmap = drm_gem_dmabuf_kunmap,
-	.unmap_atomic = drm_gem_dmabuf_kunmap_atomic,
 	.mmap = drm_gem_dmabuf_mmap,
 	.vmap = drm_gem_dmabuf_vmap,
 	.vunmap = drm_gem_dmabuf_vunmap,
