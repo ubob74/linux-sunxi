@@ -36,6 +36,7 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_encoder.h>
+#include <drm/drm_fb_helper.h>
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
@@ -132,6 +133,13 @@ struct virtio_gpu_framebuffer {
 };
 #define to_virtio_gpu_framebuffer(x) \
 	container_of(x, struct virtio_gpu_framebuffer, base)
+
+struct virtio_gpu_fbdev {
+	struct drm_fb_helper           helper;
+	struct virtio_gpu_framebuffer  vgfb;
+	struct virtio_gpu_device       *vgdev;
+	struct delayed_work            work;
+};
 
 struct virtio_gpu_mman {
 	struct ttm_bo_global_ref        bo_global_ref;
@@ -262,7 +270,8 @@ void virtio_gpu_cmd_create_resource(struct virtio_gpu_device *vgdev,
 void virtio_gpu_cmd_unref_resource(struct virtio_gpu_device *vgdev,
 				   uint32_t resource_id);
 void virtio_gpu_cmd_transfer_to_host_2d(struct virtio_gpu_device *vgdev,
-					uint32_t resource_id, uint64_t offset,
+					struct virtio_gpu_object *bo,
+					uint64_t offset,
 					__le32 width, __le32 height,
 					__le32 x, __le32 y,
 					struct virtio_gpu_fence **fence);
@@ -308,7 +317,8 @@ void virtio_gpu_cmd_transfer_from_host_3d(struct virtio_gpu_device *vgdev,
 					  struct virtio_gpu_box *box,
 					  struct virtio_gpu_fence **fence);
 void virtio_gpu_cmd_transfer_to_host_3d(struct virtio_gpu_device *vgdev,
-					uint32_t resource_id, uint32_t ctx_id,
+					struct virtio_gpu_object *bo,
+					uint32_t ctx_id,
 					uint64_t offset, uint32_t level,
 					struct virtio_gpu_box *box,
 					struct virtio_gpu_fence **fence);
@@ -353,7 +363,8 @@ void virtio_gpu_fence_event_process(struct virtio_gpu_device *vdev,
 int virtio_gpu_object_create(struct virtio_gpu_device *vgdev,
 			     unsigned long size, bool kernel, bool pinned,
 			     struct virtio_gpu_object **bo_ptr);
-int virtio_gpu_object_kmap(struct virtio_gpu_object *bo, void **ptr);
+void virtio_gpu_object_kunmap(struct virtio_gpu_object *bo);
+int virtio_gpu_object_kmap(struct virtio_gpu_object *bo);
 int virtio_gpu_object_get_sg_table(struct virtio_gpu_device *qdev,
 				   struct virtio_gpu_object *bo);
 void virtio_gpu_object_free_sg_table(struct virtio_gpu_object *bo);
