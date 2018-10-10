@@ -751,7 +751,8 @@ static int uvc_ioctl_qbuf(struct file *file, void *fh, struct v4l2_buffer *buf)
 	if (!uvc_has_privileges(handle))
 		return -EBUSY;
 
-	return uvc_queue_buffer(&stream->queue, buf);
+	return uvc_queue_buffer(&stream->queue,
+				stream->vdev.v4l2_dev->mdev, buf);
 }
 
 static int uvc_ioctl_expbuf(struct file *file, void *fh,
@@ -994,7 +995,7 @@ static int uvc_ioctl_s_ctrl(struct file *file, void *fh,
 	if (ret < 0)
 		return ret;
 
-	ret = uvc_ctrl_set(chain, &xctrl);
+	ret = uvc_ctrl_set(handle, &xctrl);
 	if (ret < 0) {
 		uvc_ctrl_rollback(handle);
 		return ret;
@@ -1069,7 +1070,7 @@ static int uvc_ioctl_s_try_ext_ctrls(struct uvc_fh *handle,
 		return ret;
 
 	for (i = 0; i < ctrls->count; ++ctrl, ++i) {
-		ret = uvc_ctrl_set(chain, ctrl);
+		ret = uvc_ctrl_set(handle, ctrl);
 		if (ret < 0) {
 			uvc_ctrl_rollback(handle);
 			ctrls->error_idx = commit ? ctrls->count : i;

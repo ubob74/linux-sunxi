@@ -159,7 +159,7 @@ int intel_plane_atomic_check_with_state(const struct intel_crtc_state *old_crtc_
 	}
 
 	intel_state->base.visible = false;
-	ret = intel_plane->check_plane(intel_plane, crtc_state, intel_state);
+	ret = intel_plane->check_plane(crtc_state, intel_state);
 	if (ret)
 		return ret;
 
@@ -170,7 +170,9 @@ int intel_plane_atomic_check_with_state(const struct intel_crtc_state *old_crtc_
 	if (state->fb && INTEL_GEN(dev_priv) >= 9 && crtc_state->base.enable &&
 	    adjusted_mode->flags & DRM_MODE_FLAG_INTERLACE) {
 		if (state->fb->modifier == I915_FORMAT_MOD_Y_TILED ||
-		    state->fb->modifier == I915_FORMAT_MOD_Yf_TILED) {
+		    state->fb->modifier == I915_FORMAT_MOD_Yf_TILED ||
+		    state->fb->modifier == I915_FORMAT_MOD_Y_TILED_CCS ||
+		    state->fb->modifier == I915_FORMAT_MOD_Yf_TILED_CCS) {
 			DRM_DEBUG_KMS("Y/Yf tiling not supported in IF-ID mode\n");
 			return -EINVAL;
 		}
@@ -265,7 +267,8 @@ intel_plane_atomic_get_property(struct drm_plane *plane,
 				struct drm_property *property,
 				uint64_t *val)
 {
-	DRM_DEBUG_KMS("Unknown plane property '%s'\n", property->name);
+	DRM_DEBUG_KMS("Unknown property [PROP:%d:%s]\n",
+		      property->base.id, property->name);
 	return -EINVAL;
 }
 
@@ -287,6 +290,7 @@ intel_plane_atomic_set_property(struct drm_plane *plane,
 				struct drm_property *property,
 				uint64_t val)
 {
-	DRM_DEBUG_KMS("Unknown plane property '%s'\n", property->name);
+	DRM_DEBUG_KMS("Unknown property [PROP:%d:%s]\n",
+		      property->base.id, property->name);
 	return -EINVAL;
 }

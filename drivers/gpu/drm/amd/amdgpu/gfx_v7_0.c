@@ -57,36 +57,36 @@ static void gfx_v7_0_set_ring_funcs(struct amdgpu_device *adev);
 static void gfx_v7_0_set_irq_funcs(struct amdgpu_device *adev);
 static void gfx_v7_0_set_gds_init(struct amdgpu_device *adev);
 
-MODULE_FIRMWARE("radeon/bonaire_pfp.bin");
-MODULE_FIRMWARE("radeon/bonaire_me.bin");
-MODULE_FIRMWARE("radeon/bonaire_ce.bin");
-MODULE_FIRMWARE("radeon/bonaire_rlc.bin");
-MODULE_FIRMWARE("radeon/bonaire_mec.bin");
+MODULE_FIRMWARE("amdgpu/bonaire_pfp.bin");
+MODULE_FIRMWARE("amdgpu/bonaire_me.bin");
+MODULE_FIRMWARE("amdgpu/bonaire_ce.bin");
+MODULE_FIRMWARE("amdgpu/bonaire_rlc.bin");
+MODULE_FIRMWARE("amdgpu/bonaire_mec.bin");
 
-MODULE_FIRMWARE("radeon/hawaii_pfp.bin");
-MODULE_FIRMWARE("radeon/hawaii_me.bin");
-MODULE_FIRMWARE("radeon/hawaii_ce.bin");
-MODULE_FIRMWARE("radeon/hawaii_rlc.bin");
-MODULE_FIRMWARE("radeon/hawaii_mec.bin");
+MODULE_FIRMWARE("amdgpu/hawaii_pfp.bin");
+MODULE_FIRMWARE("amdgpu/hawaii_me.bin");
+MODULE_FIRMWARE("amdgpu/hawaii_ce.bin");
+MODULE_FIRMWARE("amdgpu/hawaii_rlc.bin");
+MODULE_FIRMWARE("amdgpu/hawaii_mec.bin");
 
-MODULE_FIRMWARE("radeon/kaveri_pfp.bin");
-MODULE_FIRMWARE("radeon/kaveri_me.bin");
-MODULE_FIRMWARE("radeon/kaveri_ce.bin");
-MODULE_FIRMWARE("radeon/kaveri_rlc.bin");
-MODULE_FIRMWARE("radeon/kaveri_mec.bin");
-MODULE_FIRMWARE("radeon/kaveri_mec2.bin");
+MODULE_FIRMWARE("amdgpu/kaveri_pfp.bin");
+MODULE_FIRMWARE("amdgpu/kaveri_me.bin");
+MODULE_FIRMWARE("amdgpu/kaveri_ce.bin");
+MODULE_FIRMWARE("amdgpu/kaveri_rlc.bin");
+MODULE_FIRMWARE("amdgpu/kaveri_mec.bin");
+MODULE_FIRMWARE("amdgpu/kaveri_mec2.bin");
 
-MODULE_FIRMWARE("radeon/kabini_pfp.bin");
-MODULE_FIRMWARE("radeon/kabini_me.bin");
-MODULE_FIRMWARE("radeon/kabini_ce.bin");
-MODULE_FIRMWARE("radeon/kabini_rlc.bin");
-MODULE_FIRMWARE("radeon/kabini_mec.bin");
+MODULE_FIRMWARE("amdgpu/kabini_pfp.bin");
+MODULE_FIRMWARE("amdgpu/kabini_me.bin");
+MODULE_FIRMWARE("amdgpu/kabini_ce.bin");
+MODULE_FIRMWARE("amdgpu/kabini_rlc.bin");
+MODULE_FIRMWARE("amdgpu/kabini_mec.bin");
 
-MODULE_FIRMWARE("radeon/mullins_pfp.bin");
-MODULE_FIRMWARE("radeon/mullins_me.bin");
-MODULE_FIRMWARE("radeon/mullins_ce.bin");
-MODULE_FIRMWARE("radeon/mullins_rlc.bin");
-MODULE_FIRMWARE("radeon/mullins_mec.bin");
+MODULE_FIRMWARE("amdgpu/mullins_pfp.bin");
+MODULE_FIRMWARE("amdgpu/mullins_me.bin");
+MODULE_FIRMWARE("amdgpu/mullins_ce.bin");
+MODULE_FIRMWARE("amdgpu/mullins_rlc.bin");
+MODULE_FIRMWARE("amdgpu/mullins_mec.bin");
 
 static const struct amdgpu_gds_reg_offset amdgpu_gds_reg_offset[] =
 {
@@ -925,7 +925,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 	default: BUG();
 	}
 
-	snprintf(fw_name, sizeof(fw_name), "radeon/%s_pfp.bin", chip_name);
+	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_pfp.bin", chip_name);
 	err = request_firmware(&adev->gfx.pfp_fw, fw_name, adev->dev);
 	if (err)
 		goto out;
@@ -933,7 +933,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 	if (err)
 		goto out;
 
-	snprintf(fw_name, sizeof(fw_name), "radeon/%s_me.bin", chip_name);
+	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_me.bin", chip_name);
 	err = request_firmware(&adev->gfx.me_fw, fw_name, adev->dev);
 	if (err)
 		goto out;
@@ -941,7 +941,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 	if (err)
 		goto out;
 
-	snprintf(fw_name, sizeof(fw_name), "radeon/%s_ce.bin", chip_name);
+	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_ce.bin", chip_name);
 	err = request_firmware(&adev->gfx.ce_fw, fw_name, adev->dev);
 	if (err)
 		goto out;
@@ -949,7 +949,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 	if (err)
 		goto out;
 
-	snprintf(fw_name, sizeof(fw_name), "radeon/%s_mec.bin", chip_name);
+	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_mec.bin", chip_name);
 	err = request_firmware(&adev->gfx.mec_fw, fw_name, adev->dev);
 	if (err)
 		goto out;
@@ -958,7 +958,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 		goto out;
 
 	if (adev->asic_type == CHIP_KAVERI) {
-		snprintf(fw_name, sizeof(fw_name), "radeon/%s_mec2.bin", chip_name);
+		snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_mec2.bin", chip_name);
 		err = request_firmware(&adev->gfx.mec2_fw, fw_name, adev->dev);
 		if (err)
 			goto out;
@@ -967,7 +967,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 			goto out;
 	}
 
-	snprintf(fw_name, sizeof(fw_name), "radeon/%s_rlc.bin", chip_name);
+	snprintf(fw_name, sizeof(fw_name), "amdgpu/%s_rlc.bin", chip_name);
 	err = request_firmware(&adev->gfx.rlc_fw, fw_name, adev->dev);
 	if (err)
 		goto out;
@@ -4170,15 +4170,6 @@ static void gfx_v7_0_ring_emit_gds_switch(struct amdgpu_ring *ring,
 					  uint32_t gws_base, uint32_t gws_size,
 					  uint32_t oa_base, uint32_t oa_size)
 {
-	gds_base = gds_base >> AMDGPU_GDS_SHIFT;
-	gds_size = gds_size >> AMDGPU_GDS_SHIFT;
-
-	gws_base = gws_base >> AMDGPU_GWS_SHIFT;
-	gws_size = gws_size >> AMDGPU_GWS_SHIFT;
-
-	oa_base = oa_base >> AMDGPU_OA_SHIFT;
-	oa_size = oa_size >> AMDGPU_OA_SHIFT;
-
 	/* GDS Base */
 	amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
 	amdgpu_ring_write(ring, (WRITE_DATA_ENGINE_SEL(0) |
@@ -4210,6 +4201,18 @@ static void gfx_v7_0_ring_emit_gds_switch(struct amdgpu_ring *ring,
 	amdgpu_ring_write(ring, amdgpu_gds_reg_offset[vmid].oa);
 	amdgpu_ring_write(ring, 0);
 	amdgpu_ring_write(ring, (1 << (oa_size + oa_base)) - (1 << oa_base));
+}
+
+static void gfx_v7_0_ring_soft_recovery(struct amdgpu_ring *ring, unsigned vmid)
+{
+	struct amdgpu_device *adev = ring->adev;
+	uint32_t value = 0;
+
+	value = REG_SET_FIELD(value, SQ_CMD, CMD, 0x03);
+	value = REG_SET_FIELD(value, SQ_CMD, MODE, 0x01);
+	value = REG_SET_FIELD(value, SQ_CMD, CHECK_VMID, 1);
+	value = REG_SET_FIELD(value, SQ_CMD, VM_ID, vmid);
+	WREG32(mmSQ_CMD, value);
 }
 
 static uint32_t wave_read_ind(struct amdgpu_device *adev, uint32_t simd, uint32_t wave, uint32_t address)
@@ -4578,25 +4581,6 @@ static int gfx_v7_0_sw_init(void *handle)
 			}
 		}
 	}
-
-	/* reserve GDS, GWS and OA resource for gfx */
-	r = amdgpu_bo_create_kernel(adev, adev->gds.mem.gfx_partition_size,
-				    PAGE_SIZE, AMDGPU_GEM_DOMAIN_GDS,
-				    &adev->gds.gds_gfx_bo, NULL, NULL);
-	if (r)
-		return r;
-
-	r = amdgpu_bo_create_kernel(adev, adev->gds.gws.gfx_partition_size,
-				    PAGE_SIZE, AMDGPU_GEM_DOMAIN_GWS,
-				    &adev->gds.gws_gfx_bo, NULL, NULL);
-	if (r)
-		return r;
-
-	r = amdgpu_bo_create_kernel(adev, adev->gds.oa.gfx_partition_size,
-				    PAGE_SIZE, AMDGPU_GEM_DOMAIN_OA,
-				    &adev->gds.oa_gfx_bo, NULL, NULL);
-	if (r)
-		return r;
 
 	adev->gfx.ce_ram_size = 0x8000;
 
@@ -5088,6 +5072,7 @@ static const struct amdgpu_ring_funcs gfx_v7_0_ring_funcs_gfx = {
 	.pad_ib = amdgpu_ring_generic_pad_ib,
 	.emit_cntxcntl = gfx_v7_ring_emit_cntxcntl,
 	.emit_wreg = gfx_v7_0_ring_emit_wreg,
+	.soft_recovery = gfx_v7_0_ring_soft_recovery,
 };
 
 static const struct amdgpu_ring_funcs gfx_v7_0_ring_funcs_compute = {

@@ -3511,7 +3511,7 @@ static void bttv_irq_debug_low_latency(struct bttv *btv, u32 rc)
 	}
 	pr_notice("%d: Uhm. Looks like we have unusual high IRQ latencies\n",
 		  btv->c.nr);
-	pr_notice("%d: Lets try to catch the culpit red-handed ...\n",
+	pr_notice("%d: Lets try to catch the culprit red-handed ...\n",
 		  btv->c.nr);
 	dump_stack();
 }
@@ -4211,7 +4211,7 @@ static int bttv_probe(struct pci_dev *dev, const struct pci_device_id *pci_id)
 	/* register video4linux + input */
 	if (!bttv_tvcards[btv->c.type].no_video) {
 		v4l2_ctrl_add_handler(&btv->radio_ctrl_handler, hdl,
-				v4l2_ctrl_radio_filter);
+				v4l2_ctrl_radio_filter, false);
 		if (btv->radio_ctrl_handler.error) {
 			result = btv->radio_ctrl_handler.error;
 			goto fail2;
