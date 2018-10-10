@@ -1280,6 +1280,7 @@ static int iceland_populate_single_memory_level(
 	memory_level->DisplayWatermark = PPSMC_DISPLAY_WATERMARK_LOW;
 
 	data->display_timing.num_existing_displays = hwmgr->display_config->num_display;
+	data->display_timing.vrefresh = hwmgr->display_config->vrefresh;
 
 	/* stutter mode not support on iceland */
 
@@ -1574,12 +1575,6 @@ static int iceland_populate_smc_vce_level(struct pp_hwmgr *hwmgr,
 
 static int iceland_populate_smc_acp_level(struct pp_hwmgr *hwmgr,
 		SMU71_Discrete_DpmTable *table)
-{
-	return 0;
-}
-
-static int iceland_populate_smc_samu_level(struct pp_hwmgr *hwmgr,
-	SMU71_Discrete_DpmTable *table)
 {
 	return 0;
 }
@@ -1991,10 +1986,6 @@ static int iceland_init_smc_table(struct pp_hwmgr *hwmgr)
 	result = iceland_populate_smc_acp_level(hwmgr, table);
 	PP_ASSERT_WITH_CODE(0 == result,
 		"Failed to initialize ACP Level!", return result;);
-
-	result = iceland_populate_smc_samu_level(hwmgr, table);
-	PP_ASSERT_WITH_CODE(0 == result,
-		"Failed to initialize SAMU Level!", return result;);
 
 	/* Since only the initial state is completely set up at this point (the other states are just copies of the boot state) we only */
 	/* need to populate the  ARB settings for the initial state. */

@@ -211,12 +211,18 @@ static int smu10_set_clock_limit(struct pp_hwmgr *hwmgr, const void *input)
 	return 0;
 }
 
+static inline uint32_t convert_10k_to_mhz(uint32_t clock)
+{
+	return (clock + 99) / 100;
+}
+
 static int smu10_set_deep_sleep_dcefclk(struct pp_hwmgr *hwmgr, uint32_t clock)
 {
 	struct smu10_hwmgr *smu10_data = (struct smu10_hwmgr *)(hwmgr->backend);
 
-	if (smu10_data->need_min_deep_sleep_dcefclk && smu10_data->deep_sleep_dcefclk != clock/100) {
-		smu10_data->deep_sleep_dcefclk = clock/100;
+	if (smu10_data->need_min_deep_sleep_dcefclk &&
+	    smu10_data->deep_sleep_dcefclk != convert_10k_to_mhz(clock)) {
+		smu10_data->deep_sleep_dcefclk = convert_10k_to_mhz(clock);
 		smum_send_msg_to_smc_with_parameter(hwmgr,
 					PPSMC_MSG_SetMinDeepSleepDcefclk,
 					smu10_data->deep_sleep_dcefclk);
@@ -545,11 +551,17 @@ static int smu10_dpm_force_dpm_level(struct pp_hwmgr *hwmgr,
 				enum amd_dpm_forced_level level)
 {
 	struct smu10_hwmgr *data = hwmgr->backend;
+	struct amdgpu_device *adev = hwmgr->adev;
 
 	if (hwmgr->smu_version < 0x1E3700) {
 		pr_info("smu firmware version too old, can not set dpm level\n");
 		return 0;
 	}
+
+	/* Disable UMDPSTATE support on rv2 temporarily */
+	if ((adev->asic_type == CHIP_RAVEN) &&
+	    (adev->rev_id >= 8))
+		return 0;
 
 	switch (level) {
 	case AMD_DPM_FORCED_LEVEL_HIGH:
@@ -993,7 +1005,7 @@ static int smu10_get_clock_by_type_with_latency(struct pp_hwmgr *hwmgr,
 
 	clocks->num_levels = 0;
 	for (i = 0; i < pclk_vol_table->count; i++) {
-		clocks->data[i].clocks_in_khz = pclk_vol_table->entries[i].clk;
+		clocks->data[i].clocks_in_khz = pclk_vol_table->entries[i].clk * 10;
 		clocks->data[i].latency_in_us = latency_required ?
 						smu10_get_mem_latency(hwmgr,
 						pclk_vol_table->entries[i].clk) :
@@ -1044,7 +1056,7 @@ static int smu10_get_clock_by_type_with_voltage(struct pp_hwmgr *hwmgr,
 
 	clocks->num_levels = 0;
 	for (i = 0; i < pclk_vol_table->count; i++) {
-		clocks->data[i].clocks_in_khz = pclk_vol_table->entries[i].clk;
+		clocks->data[i].clocks_in_khz = pclk_vol_table->entries[i].clk  * 10;
 		clocks->data[i].voltage_in_mv = pclk_vol_table->entries[i].vol;
 		clocks->num_levels++;
 	}
@@ -1108,9 +1120,10 @@ static int smu10_read_sensor(struct pp_hwmgr *hwmgr, int idx,
 }
 
 static int smu10_set_watermarks_for_clocks_ranges(struct pp_hwmgr *hwmgr,
-		struct pp_wm_sets_with_clock_ranges_soc15 *wm_with_clock_ranges)
+		void *clock_ranges)
 {
 	struct smu10_hwmgr *data = hwmgr->backend;
+	struct dm_pp_wm_sets_with_clock_ranges_soc15 *wm_with_clock_ranges = clock_ranges;
 	Watermarks_t *table = &(data->water_marks_table);
 	int result = 0;
 
@@ -1126,7 +1139,7 @@ static int smu10_smus_notify_pwe(struct pp_hwmgr *hwmgr)
 	return smum_send_msg_to_smc(hwmgr, PPSMC_MSG_SetRccPfcPmeRestoreRegister);
 }
 
-static int smu10_set_mmhub_powergating_by_smu(struct pp_hwmgr *hwmgr)
+static int smu10_powergate_mmhub(struct pp_hwmgr *hwmgr)
 {
 	return smum_send_msg_to_smc(hwmgr, PPSMC_MSG_PowerGateMmHub);
 }
@@ -1182,10 +1195,10 @@ static const struct pp_hwmgr_func smu10_hwmgr_funcs = {
 	.asic_setup = smu10_setup_asic_task,
 	.power_state_set = smu10_set_power_state_tasks,
 	.dynamic_state_management_disable = smu10_disable_dpm_tasks,
-	.set_mmhub_powergating_by_smu = smu10_set_mmhub_powergating_by_smu,
+	.powergate_mmhub = smu10_powergate_mmhub,
 	.smus_notify_pwe = smu10_smus_notify_pwe,
-	.gfx_off_control = smu10_gfx_off_control,
 	.display_clock_voltage_request = smu10_display_clock_voltage_request,
+	.powergate_gfx = smu10_gfx_off_control,
 };
 
 int smu10_init_function_pointers(struct pp_hwmgr *hwmgr)

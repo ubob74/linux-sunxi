@@ -74,7 +74,7 @@ static vm_fault_t vgem_gem_fault(struct vm_fault *vmf)
 
 	num_pages = DIV_ROUND_UP(obj->base.size, PAGE_SIZE);
 
-	if (page_offset > num_pages)
+	if (page_offset >= num_pages)
 		return VM_FAULT_SIGBUS;
 
 	mutex_lock(&obj->pages_lock);
@@ -504,7 +504,7 @@ out_free:
 static void __exit vgem_exit(void)
 {
 	drm_dev_unregister(&vgem_device->drm);
-	drm_dev_unref(&vgem_device->drm);
+	drm_dev_put(&vgem_device->drm);
 }
 
 module_init(vgem_init);

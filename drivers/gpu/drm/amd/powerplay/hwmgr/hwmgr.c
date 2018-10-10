@@ -44,11 +44,13 @@ extern const struct pp_smumgr_func vegam_smu_funcs;
 extern const struct pp_smumgr_func vega10_smu_funcs;
 extern const struct pp_smumgr_func vega12_smu_funcs;
 extern const struct pp_smumgr_func smu10_smu_funcs;
+extern const struct pp_smumgr_func vega20_smu_funcs;
 
 extern int smu7_init_function_pointers(struct pp_hwmgr *hwmgr);
 extern int smu8_init_function_pointers(struct pp_hwmgr *hwmgr);
 extern int vega10_hwmgr_init(struct pp_hwmgr *hwmgr);
 extern int vega12_hwmgr_init(struct pp_hwmgr *hwmgr);
+extern int vega20_hwmgr_init(struct pp_hwmgr *hwmgr);
 extern int smu10_init_function_pointers(struct pp_hwmgr *hwmgr);
 
 static int polaris_set_asic_special_caps(struct pp_hwmgr *hwmgr);
@@ -81,7 +83,6 @@ int hwmgr_early_init(struct pp_hwmgr *hwmgr)
 		return -EINVAL;
 
 	hwmgr->usec_timeout = AMD_MAX_USEC_TIMEOUT;
-	hwmgr->power_source = PP_PowerSource_AC;
 	hwmgr->pp_table_version = PP_TABLE_V1;
 	hwmgr->dpm_level = AMD_DPM_FORCED_LEVEL_AUTO;
 	hwmgr->request_dpm_level = AMD_DPM_FORCED_LEVEL_AUTO;
@@ -148,16 +149,20 @@ int hwmgr_early_init(struct pp_hwmgr *hwmgr)
 		smu7_init_function_pointers(hwmgr);
 		break;
 	case AMDGPU_FAMILY_AI:
-		hwmgr->feature_mask &= ~PP_GFXOFF_MASK;
 		switch (hwmgr->chip_id) {
 		case CHIP_VEGA10:
-		case CHIP_VEGA20:
+			hwmgr->feature_mask &= ~PP_GFXOFF_MASK;
 			hwmgr->smumgr_funcs = &vega10_smu_funcs;
 			vega10_hwmgr_init(hwmgr);
 			break;
 		case CHIP_VEGA12:
 			hwmgr->smumgr_funcs = &vega12_smu_funcs;
 			vega12_hwmgr_init(hwmgr);
+			break;
+		case CHIP_VEGA20:
+			hwmgr->feature_mask &= ~PP_GFXOFF_MASK;
+			hwmgr->smumgr_funcs = &vega20_smu_funcs;
+			vega20_hwmgr_init(hwmgr);
 			break;
 		default:
 			return -EINVAL;
@@ -236,6 +241,11 @@ int hwmgr_hw_init(struct pp_hwmgr *hwmgr)
 	ret = hwmgr->hwmgr_func->backend_init(hwmgr);
 	if (ret)
 		goto err1;
+ /* make sure dc limits are valid */
+	if ((hwmgr->dyn_state.max_clock_voltage_on_dc.sclk == 0) ||
+			(hwmgr->dyn_state.max_clock_voltage_on_dc.mclk == 0))
+			hwmgr->dyn_state.max_clock_voltage_on_dc =
+					hwmgr->dyn_state.max_clock_voltage_on_ac;
 
 	ret = psm_init_power_state_table(hwmgr);
 	if (ret)

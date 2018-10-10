@@ -11,7 +11,6 @@
  * (at your option) any later version.
  */
 
-#include <asm/cacheflush.h>
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
@@ -23,6 +22,8 @@
 #include <media/v4l2-dev.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mc.h>
+
+#include <asm/cacheflush.h>
 
 #include "iss_video.h"
 #include "iss.h"
@@ -805,9 +806,10 @@ iss_video_querybuf(struct file *file, void *fh, struct v4l2_buffer *b)
 static int
 iss_video_qbuf(struct file *file, void *fh, struct v4l2_buffer *b)
 {
+	struct iss_video *video = video_drvdata(file);
 	struct iss_video_fh *vfh = to_iss_video_fh(fh);
 
-	return vb2_qbuf(&vfh->queue, b);
+	return vb2_qbuf(&vfh->queue, video->video.v4l2_dev->mdev, b);
 }
 
 static int
